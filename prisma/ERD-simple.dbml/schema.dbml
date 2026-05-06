@@ -1,0 +1,156 @@
+Table users {
+  id String [pk]
+  name String [not null]
+  email String [unique, not null]
+  password String [not null]
+  phone String
+  status UserStatus [not null, default: 'pending']
+  avatarInitials String
+  avatarColor String
+  supervisorId String
+  departmentId String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  supervisor users
+  agents users [not null]
+  department departments
+  submittedComplaints complaints [not null]
+  assignedComplaints complaints [not null]
+  supervisedComplaints complaints [not null]
+  comments comments [not null]
+  roles roles [not null]
+}
+
+Table roles {
+  id String [pk]
+  name String [unique, not null]
+  description String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  users users [not null]
+}
+
+Table departments {
+  id String [pk]
+  name String [unique, not null]
+  description String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  users users [not null]
+  complaints complaints [not null]
+}
+
+Table categories {
+  id String [pk]
+  name String [unique, not null]
+  description String
+  color String [not null, default: '#94a3b8']
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  complaints complaints [not null]
+}
+
+Table complaints {
+  id String [pk]
+  title String [not null]
+  body String
+  address String
+  priority Priority [not null, default: 'medium']
+  status Status [not null, default: 'open']
+  visibility ComplaintVisibility [not null, default: 'private']
+  isAnonymous Boolean [not null, default: false]
+  citizenRating Int
+  resolvedAt DateTime
+  closedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  categoryId String [not null]
+  departmentId String
+  submittedById String [not null]
+  assigneeId String
+  supervisorId String
+  category categories [not null]
+  department departments
+  submittedBy users [not null]
+  assignee users
+  supervisor users
+  comments comments [not null]
+  attachments attachments [not null]
+}
+
+Table comments {
+  id String [pk]
+  body String [not null]
+  isInternal Boolean [not null, default: false]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  complaintId String [not null]
+  authorId String [not null]
+  complaint complaints [not null]
+  author users [not null]
+}
+
+Table attachments {
+  id String [pk]
+  filename String [not null]
+  url String [not null]
+  mimeType String
+  sizeBytes Int
+  createdAt DateTime [default: `now()`, not null]
+  complaintId String [not null]
+  complaint complaints [not null]
+}
+
+Table RoleToUser {
+  rolesId String [ref: > roles.id]
+  usersId String [ref: > users.id]
+}
+
+Enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+Enum Status {
+  open
+  in_review
+  assigned
+  in_progress
+  resolved
+  rejected
+  escalated
+  closed
+}
+
+Enum UserStatus {
+  active
+  inactive
+  pending
+}
+
+Enum ComplaintVisibility {
+  public
+  private
+}
+
+Ref: users.supervisorId - users.id
+
+Ref: users.departmentId > departments.id
+
+Ref: complaints.categoryId > categories.id
+
+Ref: complaints.departmentId > departments.id
+
+Ref: complaints.submittedById > users.id
+
+Ref: complaints.assigneeId > users.id
+
+Ref: complaints.supervisorId > users.id
+
+Ref: comments.complaintId > complaints.id
+
+Ref: comments.authorId > users.id
+
+Ref: attachments.complaintId > complaints.id

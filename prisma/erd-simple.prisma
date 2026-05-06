@@ -1,0 +1,174 @@
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "./ERD-simple.svg"
+}
+
+generator dbml {
+  provider = "prisma-dbml-generator"
+  output   = "./ERD-simple.dbml"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+enum Status {
+  open
+  in_review
+  assigned
+  in_progress
+  resolved
+  rejected
+  escalated
+  closed
+}
+
+enum UserStatus {
+  active
+  inactive
+  pending
+}
+
+enum ComplaintVisibility {
+  public
+  private
+}
+
+
+
+model User {
+  id             String     @id @default(cuid())
+  name           String
+  email          String     @unique
+  password       String
+  phone          String?
+  status         UserStatus @default(pending)
+  avatarInitials String?
+  avatarColor    String?
+  supervisorId   String?
+  departmentId   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  supervisor           User?       @relation("SupervisorAgents", fields: [supervisorId], references: [id])
+  agents               User[]      @relation("SupervisorAgents")
+  department           Department? @relation(fields: [departmentId], references: [id])
+  submittedComplaints  Complaint[] @relation("SubmittedBy")
+  assignedComplaints   Complaint[] @relation("AssignedAgent")
+  supervisedComplaints Complaint[] @relation("ComplaintSupervisor")
+  comments             Comment[]
+  roles                Role[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+
+  @@map("roles")
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users      User[]
+  complaints Complaint[]
+
+  @@map("departments")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String   @default("#94a3b8")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  complaints Complaint[]
+
+  @@map("categories")
+}
+
+model Complaint {
+  id            String              @id @default(cuid())
+  title         String
+  body          String?
+  address       String?
+  priority      Priority            @default(medium)
+  status        Status              @default(open)
+  visibility    ComplaintVisibility @default(private)
+  isAnonymous   Boolean             @default(false)
+  citizenRating Int?
+  resolvedAt    DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  categoryId    String
+  departmentId  String?
+  submittedById String
+  assigneeId    String?
+  supervisorId  String?
+
+  category    Category    @relation(fields: [categoryId], references: [id])
+  department  Department? @relation(fields: [departmentId], references: [id])
+  submittedBy User        @relation("SubmittedBy", fields: [submittedById], references: [id])
+  assignee    User?       @relation("AssignedAgent", fields: [assigneeId], references: [id])
+  supervisor  User?       @relation("ComplaintSupervisor", fields: [supervisorId], references: [id])
+  comments    Comment[]
+  attachments Attachment[]
+
+  @@map("complaints")
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  body       String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  complaintId String
+  authorId    String
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+  author    User      @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  mimeType  String?
+  sizeBytes Int?
+  createdAt DateTime @default(now())
+
+  complaintId String
+
+  complaint Complaint @relation(fields: [complaintId], references: [id])
+
+  @@map("attachments")
+}

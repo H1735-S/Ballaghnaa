@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+enum Status {
+  open
+  in_review
+  assigned
+  in_progress
+  resolved
+  rejected
+  escalated
+  closed
+}
+
+enum UserStatus {
+  active
+  inactive
+  pending
+}
+
+enum SupervisorType {
+  general
+  specialized
+}
+
+enum ComplaintVisibility {
+  public
+  private
+}
+
+enum ActivityAction {
+  complaint_created
+  complaint_updated
+  complaint_assigned
+  complaint_reassigned
+  complaint_escalated
+  complaint_resolved
+  complaint_closed
+  complaint_reopened
+  comment_added
+  attachment_added
+  status_changed
+  priority_changed
+  user_created
+  role_assigned
+  permission_updated
+}
+
+
+
+
+
+model User {
+  id         String     @id @default(cuid())
+  name       String
+  email      String     @unique
+  password   String
+  phone      String?
+  nationalId String?    @unique
+  gender     String?
+  status     UserStatus @default(pending)
+
+  avatarInitials String?
+  avatarColor    String?
+
+  
+  supervisorId String?
+  supervisor   User?   @relation("SupervisorAgents", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  agents       User[]  @relation("SupervisorAgents")
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  supervisorType SupervisorType? 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  
+  submittedComplaints Complaint[]  @relation("SubmittedBy")
+  assignedComplaints  Complaint[]  @relation("AssignedAgent")
+  supervisedComplaints Complaint[] @relation("ComplaintSupervisor")
+
+  comments      Comment[]
+  activityLogs  ActivityLog[]
+  userRoles     UserRoleAssignment[]
+  notifications Notification[]
+  statusChanges ComplaintStatusHistory[]
+  attachments   Attachment[]
+  surveyResponses SurveyResponse[]
+  specializations AgentSpecialization[]
+  categoryRequestsMade    CategoryRequest[] @relation("CategoryRequestedBy")
+  categoryRequestsReviewed CategoryRequest[] @relation("CategoryReviewedBy")
+  chatMessages    ChatMessage[]
+
+  @@index([email])
+  @@index([status])
+  @@index([departmentId])
+  @@map("users")
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  complaints   Complaint[]
+
+  @@map("departments")
+}
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique 
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       UserRoleAssignment[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRoleAssignment {
+  id        String @id @default(cuid())
+  userId    String
+  roleId    String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_role_assignments")
+}
+
+model RolePermission {
+  id            String @id @default(cuid())
+  roleId        String
+  permissionId  String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  nameEn      String  @default("")
+  description String?
+  descriptionEn String?
+  color       String  @default("#94a3b8")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaints       Complaint[]
+  agentSpecializations AgentSpecialization[]
+
+  @@map("categories")
+}
+
+model AgentSpecialization {
+  id         String @id @default(cuid())
+  userId     String
+  categoryId String
+  assignedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+  @@index([categoryId])
+  @@map("agent_specializations")
+}
+
+model Complaint {
+  id       String  @id @default(cuid())
+  trackingCode String? @unique
+  title    String
+  body     String? @db.LongText
+  address  String? @db.LongText
+  latitude Float?
+  longitude Float?
+
+  
+  nationalId   String?
+  phoneNumber  String?
+  gender       String? 
+  aiAnalysis   String? @db.LongText
+
+  priority   Priority   @default(medium)
+  status     Status     @default(open)
+  visibility ComplaintVisibility @default(private)
+
+  categoryId     String
+  departmentId   String?
+  submittedById  String
+  assigneeId     String?
+  supervisorId   String?
+
+  isAnonymous    Boolean  @default(false)
+  citizenRating  Int?
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category     Category    @relation(fields: [categoryId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  submittedBy  User        @relation("SubmittedBy", fields: [submittedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assignee     User?       @relation("AssignedAgent", fields: [assigneeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisor   User?       @relation("ComplaintSupervisor", fields: [supervisorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  comments      Comment[]
+  attachments   Attachment[]
+  tags          ComplaintTag[]
+  activityLogs  ActivityLog[]
+  statusHistory ComplaintStatusHistory[]
+  surveys       SurveyResponse[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([categoryId])
+  @@index([departmentId])
+  @@index([assigneeId])
+  @@index([submittedById])
+  @@index([supervisorId])
+  @@index([createdAt])
+  @@map("complaints")
+}
+
+model ComplaintStatusHistory {
+  id          String @id @default(cuid())
+  complaintId String
+  oldStatus   Status?
+  newStatus   Status
+  changedById String
+  note        String?
+
+  createdAt DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  changedBy User      @relation(fields: [changedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([complaintId])
+  @@index([changedById])
+  @@index([createdAt])
+  @@map("complaint_status_history")
+}
+
+model Comment {
+  id         String  @id @default(cuid())
+  body       String
+  isInternal Boolean @default(false)
+
+  complaintId String
+  authorId    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([complaintId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+model Attachment {
+  id        String @id @default(cuid())
+  filename  String
+  url       String @db.LongText
+  mimeType  String?
+  sizeBytes Int?
+
+  complaintId String?
+  uploadedById String?
+
+  createdAt DateTime @default(now())
+
+  complaint  Complaint? @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  uploadedBy User?      @relation(fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([complaintId])
+  @@index([uploadedById])
+  @@map("attachments")
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("#94a3b8")
+
+  complaints ComplaintTag[]
+
+  @@map("tags")
+}
+
+model ComplaintTag {
+  complaintId String
+  tagId       String
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  tag       Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([complaintId, tagId])
+  @@map("complaint_tags")
+}
+
+model ActivityLog {
+  id          String         @id @default(cuid())
+  action      ActivityAction
+  description String?
+  metadata    String?  
+
+  complaintId String?
+  userId      String
+
+  createdAt DateTime @default(now())
+
+  complaint Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  user      User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([complaintId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model Notification {
+  id      String  @id @default(cuid())
+  title   String
+  body    String
+  isRead  Boolean @default(false)
+
+  userId String
+
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Survey {
+  id          String @id @default(cuid())
+  title       String
+  description String?
+
+  isActive   Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  questions SurveyQuestion[]
+  responses SurveyResponse[]
+
+  @@map("surveys")
+}
+
+model SurveyQuestion {
+  id        String @id @default(cuid())
+  surveyId  String
+  question  String
+  type      String 
+  options   String?  
+  order     Int
+
+  survey Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+model SurveyResponse {
+  id          String @id @default(cuid())
+  surveyId    String
+  complaintId String?
+  userId      String?
+  answers     String   
+
+  createdAt DateTime @default(now())
+
+  survey    Survey     @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  complaint Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([surveyId])
+  @@index([complaintId])
+  @@index([userId])
+  @@map("survey_responses")
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String   
+  text      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId, createdAt])
+  @@map("chat_messages")
+}
+
+enum CategoryRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model CategoryRequest {
+  id          String                @id @default(cuid())
+  nameAr      String
+  nameEn      String?
+  description String?
+  status      CategoryRequestStatus @default(pending)
+  rejectionNote String?
+
+  requestedById  String   
+  reviewedById   String?  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requestedBy User  @relation("CategoryRequestedBy", fields: [requestedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedBy  User? @relation("CategoryReviewedBy",  fields: [reviewedById],  references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status])
+  @@index([requestedById])
+  @@map("category_requests")
+}
